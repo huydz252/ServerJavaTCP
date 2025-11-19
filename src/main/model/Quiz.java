@@ -8,7 +8,7 @@ public class Quiz {
     private String title;
     private String subject;
     private List<Question> questions;
-
+    private int timeLimit;
 
 
     public int getId() {
@@ -25,5 +25,12 @@ public class Quiz {
 
     public List<Question> getQuestions() {
         return questions;
+    } 
+    
+    public int getTimeLimit() { return timeLimit; }
+    
+    @Override
+    public String toString() {
+        return this.title + " (" + this.subject + ") " +"TG: "+ timeLimit + " phút)"; 
     }
 }

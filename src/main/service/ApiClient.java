@@ -5,9 +5,13 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+
 import main.model.Quiz; 
 
 /**
@@ -67,15 +71,16 @@ public class ApiClient {
     /**
      * Gửi kết quả (điểm) lên ServerDBNodeJs (Project 1)
      */
-    public boolean postExamResult(int quizId, String machineName, double score) {
+    public boolean postExamResult(int quizId, String machineName, double score, String className) {
         try {
-            System.out.println("[ApiClient] Đang POST kết quả: " + machineName + " - " + score);
+            System.out.println("[ApiClient] Đang POST kết quả: " + machineName + " - " + score + " - " + className);
 
             // 1. Tạo JSON body
             String jsonBody = gson.toJson(Map.of(
                 "quizId", quizId,
                 "studentMachineName", machineName,
-                "score", score
+                "score", score,
+                "className", className
             ));
 
             // 2. Tạo POST request
@@ -95,6 +100,33 @@ public class ApiClient {
             e.printStackTrace();
             return false;
         }
+    }
+    
+    /**
+     * Lấy danh sách tất cả bộ đề (chỉ cần ID và Title)
+     */
+    public List<Quiz> getAllQuizzes() {
+        try {
+            System.out.println("[ApiClient] Đang lấy danh sách bộ đề...");
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(BASE_URL + "/quizzes"))
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                String jsonBody = response.body();
+                // Dùng TypeToken để dịch List<Quiz>
+                java.lang.reflect.Type listType = new TypeToken<List<Quiz>>(){}.getType();
+                List<Quiz> quizzes = gson.fromJson(jsonBody, listType);
+                return quizzes;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return new ArrayList<>(); // Trả về rỗng nếu lỗi
     }
     
     

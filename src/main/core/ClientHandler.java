@@ -27,7 +27,7 @@ public class ClientHandler extends Thread {
     private ConnectionManager manager = ConnectionManager.getInstance(); 
     
     private String agentMachineName = null;
-
+    
     public ClientHandler(Socket socket) {
         this.clientSocket = socket;
     }
@@ -40,7 +40,8 @@ public class ClientHandler extends Thread {
         return clientSocket;
     }
 
-    @Override
+
+	@Override
     public void run() {
         try {
 
@@ -97,6 +98,9 @@ public class ClientHandler extends Thread {
             case "REGISTER_ADMIN":
                 manager.registerAdmin(this);
                 break;
+            case "CMD_GET_AGENT_LIST":
+                manager.sendAgentListToAdmin(this);
+                break;
             
             case "CMD_LOCK_MACHINE":
                 String targetMachine = (String) message.getPayload().get("targetMachine");
@@ -140,12 +144,25 @@ public class ClientHandler extends Thread {
                 System.out.println("!!! CẢNH BÁO VI PHẠM: " + message.getPayload());
                 manager.broadcastToAdmins(message);
                 break;
+            case "CMD_GET_QUIZ_LIST":
+                List<Quiz> quizzes = ApiClient.getInstance().getAllQuizzes();
+                manager.sendQuizListToAdmin(this, quizzes);
+                break;
             case "CMD_START_QUIZ":
                 try {
                 	
                     Double quizIdDouble = (Double) message.getPayload().get("quizID");
+                    String className = (String) message.getPayload().get("className"); 
+                    
+                    if (className != null) {
+                        manager.setCurrentExamClassName(className);
+                        System.out.println("Đã lưu tên lớp vào hệ thống: " + className);
+                    } else {
+                        System.out.println("Cảnh báo: Admin không gửi tên lớp!");
+                    }                    //System.out.println("check className: " + currentExamClassName);
                     int quizId = quizIdDouble.intValue();
-                    System.out.println("Nhận lệnh BẮT ĐẦU THI cho ID: " + quizId);
+                    
+                    System.out.println("Nhận lệnh BẮT ĐẦU THI cho bộ đề: " + quizId);
                     
                     Quiz quizData = ApiClient.getInstance().getQuizData(quizId);	//lấy data cho quiz
 
@@ -168,7 +185,7 @@ public class ClientHandler extends Thread {
                 break;
             case "SUBMIT_QUIZ":
             	System.out.println("Nhận được SUBMIT_QUIZ từ: " + agentMachineName);
-                handleQuizSubmission(message.getPayload());
+                handleQuizSubmission(message.getPayload(), manager.getCurrentExamClassName());
             	break;
                 
             default:
@@ -176,13 +193,17 @@ public class ClientHandler extends Thread {
         }
     }
 
-	private void handleQuizSubmission(Map<String, Object> payload) {
+	private void handleQuizSubmission(Map<String, Object> payload, String className) {
 		try {
-			
+			System.out.println("check className "+ className);
             int quizId = ((Double) payload.get("quizId")).intValue();
             List<Double> userAnswersDouble = (List<Double>) payload.get("answers");
             
             Quiz quiz = ApiClient.getInstance().getQuizData(quizId);
+            if (className == null) {
+                System.out.println("Lỗi chấm điểm: Không có tên lớp (className) được lưu.");
+                className = "underfined"; 
+            }
             if (quiz == null) {
                 System.out.println("Lỗi chấm điểm: Không tìm thấy bộ đề " + quizId);
                 return;
@@ -207,7 +228,7 @@ public class ClientHandler extends Thread {
             
             System.out.println("Máy " + agentMachineName + " đạt " + correctCount + "/" + questions.size() + " - Điểm: " + score);
             
-            ApiClient.getInstance().postExamResult(quizId, agentMachineName, score);
+            ApiClient.getInstance().postExamResult(quizId, agentMachineName, score, className);
             
             // có thể gửi 1 tin nhắn về Client báo là đã nộp bài)
             

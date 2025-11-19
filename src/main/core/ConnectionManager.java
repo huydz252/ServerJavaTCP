@@ -7,13 +7,22 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.google.gson.Gson;
 
-import main.model.JsonMessage; 
+import main.model.JsonMessage;
+import main.model.Quiz; 
 
 public class ConnectionManager {
     private static ConnectionManager instance;
     private ConnectionManager() {}
-    
+    private String currentExamClassName = null;
 
+    public String getCurrentExamClassName() {
+		return currentExamClassName;
+	}
+
+	public void setCurrentExamClassName(String currentExamClassName) {
+		this.currentExamClassName = currentExamClassName;
+	}
+	
     public static synchronized ConnectionManager getInstance() {
         if (instance == null) {
             instance = new ConnectionManager();
@@ -104,8 +113,19 @@ public class ConnectionManager {
     /**
      * Gửi danh sách Agent cho CHỈ MỘT Admin (khi họ mới kết nối)
      */
-    private void sendAgentListToAdmin(ClientHandler admin) {
+    public void sendAgentListToAdmin(ClientHandler admin) {
+        
+        agentMap.entrySet().removeIf(entry -> {
+            ClientHandler handler = entry.getValue();
+            if (handler == null || handler.getClientSocket().isClosed() || !handler.isAlive()) {
+                System.out.println("Phát hiện Agent 'ma': " + entry.getKey() + ". Đang xóa...");
+                return true; 
+            }
+            return false; 
+        });
+
         List<String> agentNames = List.copyOf(agentMap.keySet());
+        
         Map<String, Object> payload = Map.of("agents", agentNames);
         JsonMessage agentListMessage = new JsonMessage("DATA_AGENT_LIST", payload);
         sendMessage(admin, agentListMessage);
@@ -189,4 +209,14 @@ public class ConnectionManager {
 			}
 		}
 	}
+	
+	/**
+     * Gửi danh sách bộ đề cho Admin
+     */
+    public void sendQuizListToAdmin(ClientHandler adminHandler, List<Quiz> quizzes) {
+        // Gói danh sách vào payload
+        Map<String, Object> payload = Map.of("quizzes", quizzes);
+        JsonMessage msg = new JsonMessage("DATA_QUIZ_LIST", payload);
+        sendMessage(adminHandler, msg);
+    }
 }

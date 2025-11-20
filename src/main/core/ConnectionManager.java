@@ -1,5 +1,6 @@
 package main.core;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -9,6 +10,9 @@ import com.google.gson.Gson;
 
 import main.model.JsonMessage;
 import main.model.Quiz; 
+
+
+//gửi cho all admin : HIện tại gửi cho all admin!!! cần fix vì mỗi lớp có 1 admin, 10 lớp có 10 admin -> loạn
 
 public class ConnectionManager {
     private static ConnectionManager instance;
@@ -76,6 +80,7 @@ public class ConnectionManager {
     public void sendMessage(ClientHandler handler, JsonMessage message) {
         try {
             String jsonMsg = gson.toJson(message);
+            jsonMsg = jsonMsg.replace("\n", " ").replace("\r", "");
             handler.getWriter().println(jsonMsg);
         } catch (Exception e) {
             System.out.println("Lỗi khi gửi tin nhắn cho: " + handler.getClientSocket().getInetAddress());
@@ -102,9 +107,14 @@ public class ConnectionManager {
      * Gửi danh sách Agent hiện tại cho TẤT CẢ Admin
      */
     private void broadcastAgentListToAdmins() {
-        List<String> agentNames = List.copyOf(agentMap.keySet());
+    	List<String> agentDisplayNames = new ArrayList<>();
+        for (ClientHandler handler : agentMap.values()) {
+             if (handler != null) {
+                 agentDisplayNames.add(handler.getClientInfo());
+             }
+        }
 
-        Map<String, Object> payload = Map.of("agents", agentNames);
+        Map<String, Object> payload = Map.of("agents", agentDisplayNames);
         JsonMessage agentListMessage = new JsonMessage("DATA_AGENT_LIST", payload);
         
         broadcastToAdmins(agentListMessage);
@@ -124,9 +134,11 @@ public class ConnectionManager {
             return false; 
         });
 
-        List<String> agentNames = List.copyOf(agentMap.keySet());
-        
-        Map<String, Object> payload = Map.of("agents", agentNames);
+        List<String> agentDisplayNames = new ArrayList<>();
+        for (ClientHandler handler : agentMap.values()) {
+            agentDisplayNames.add(handler.getClientInfo());
+        }        
+        Map<String, Object> payload = Map.of("agents", agentDisplayNames);
         JsonMessage agentListMessage = new JsonMessage("DATA_AGENT_LIST", payload);
         sendMessage(admin, agentListMessage);
     }
@@ -200,15 +212,24 @@ public class ConnectionManager {
     }
 
 
-	public void broadcastToAgents(JsonMessage message) {
-		String jsonMsg = gson.toJson(message);
-		
-		for (ClientHandler agent : agentMap.values()) {
-			if(agent != null) {
-				sendMessage(agent, message);
-			}
-		}
-	}
+    public void broadcastToAgents(JsonMessage message) {
+        String jsonMsg = gson.toJson(message);
+        
+        // [DEBUG] In ra xem có bao nhiêu agent trong danh sách
+        System.out.println(">> [DEBUG] Đang broadcast cho " + agentMap.size() + " agents...");
+        
+        if (agentMap.isEmpty()) {
+             System.out.println(">> [CẢNH BÁO] Danh sách Agent rỗng! Không ai nhận được tin.");
+        }
+
+        for (ClientHandler agent : agentMap.values()) {
+            if (agent != null) {
+                // [DEBUG] In ra xem đang gửi cho ai
+                System.out.println(">> [DEBUG] Đang gửi tới: " + agent.getClientSocket().getInetAddress());
+                sendMessage(agent, message);
+            }
+        }
+    }
 	
 	/**
      * Gửi danh sách bộ đề cho Admin

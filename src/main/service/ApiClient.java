@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import javax.security.auth.Subject;
+
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
@@ -35,6 +37,46 @@ public class ApiClient {
             instance = new ApiClient();
         }
         return instance;
+    }
+    
+    /**
+     * Kiểm tra đăng nhập sinh viên
+     * Gọi sang: POST http://localhost:3000/api/auth/student-login
+     */
+    public String checkLogin(String studentCode, String fullName) {
+        try {
+            System.out.println("[ApiClient] Đang check login cho: " + studentCode);
+
+            String jsonBody = gson.toJson(Map.of(
+                "studentCode", studentCode,
+                "fullName", fullName
+            ));
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(BASE_URL + "/auth/student-login")) 
+                    .header("Content-Type", "application/json")
+                    .POST(BodyPublishers.ofString(jsonBody))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+
+                Map<String, Object> respMap = gson.fromJson(response.body(), Map.class);
+                
+                Map<String, Object> studentMap = (Map<String, Object>) respMap.get("student");
+                
+                if (studentMap != null) {
+                    return (String) studentMap.get("fullName"); 
+                }
+            } else {
+                System.out.println("[ApiClient] Login thất bại. Status: " + response.statusCode());
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null; 
     }
 
     /**
@@ -71,7 +113,7 @@ public class ApiClient {
     /**
      * Gửi kết quả (điểm) lên ServerDBNodeJs (Project 1)
      */
-    public boolean postExamResult(int quizId, String machineName, double score, String className) {
+    public boolean postExamResult(int quizId, String machineName, String fullName, String studentCode, double score, String className, String submittedAt) {
         try {
             System.out.println("[ApiClient] Đang POST kết quả: " + machineName + " - " + score + " - " + className);
 
@@ -79,8 +121,11 @@ public class ApiClient {
             String jsonBody = gson.toJson(Map.of(
                 "quizId", quizId,
                 "studentMachineName", machineName,
+                "fullName", fullName,
+                "studentCode", studentCode,
                 "score", score,
-                "className", className
+                "className", className,
+                "submittedAt", submittedAt
             ));
 
             // 2. Tạo POST request

@@ -28,6 +28,9 @@ public class ClientHandler extends Thread {
     
     private String agentMachineName = null;
     
+    private String studentName = null; 
+    private String studentCode = null;
+    
     public ClientHandler(Socket socket) {
         this.clientSocket = socket;
     }
@@ -39,19 +42,21 @@ public class ClientHandler extends Thread {
     public Socket getClientSocket() {
         return clientSocket;
     }
+    
+    
 
 
 	@Override
     public void run() {
         try {
 
-            this.writer = new PrintWriter(clientSocket.getOutputStream(), true); // 'true' = autoFlush
+            this.writer = new PrintWriter(clientSocket.getOutputStream(), true); 
             this.reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
 
             System.out.println("Đang xử lý client: " + clientSocket.getInetAddress());
             System.out.println("");
 
-            // 2. Vòng lặp đọc tin nhắn
+            // Vòng lặp đọc tin nhắn
             String jsonString;
             while ((jsonString = reader.readLine()) != null) {
                 System.out.println("Nhận được JSON: " + jsonString);
@@ -76,6 +81,17 @@ public class ClientHandler extends Thread {
             }
         }
     }
+	
+	/**
+	 * Hàm hỗ trợ lấy thông tin hiển thị 
+	 */
+	public String getClientInfo() {
+        if (studentName != null) {
+            return agentMachineName + " - " + studentName + " (" + studentCode + ")";
+        }
+        return agentMachineName != null ? agentMachineName : "Unknown Client";
+    }
+	
 
     /**
      * Hàm phân loại và xử lý tin nhắn
@@ -94,9 +110,33 @@ public class ClientHandler extends Thread {
                     manager.registerAgent(machineName, this);
                 }
                 break;
-                
             case "REGISTER_ADMIN":
                 manager.registerAdmin(this);
+                break;
+            case "LOGIN_REQUEST":
+                String code = (String) message.getPayload().get("studentCode");
+                String name = (String) message.getPayload().get("fullName");
+                String realName = ApiClient.getInstance().checkLogin(code, name);
+                
+                if (realName != null) {
+                    this.studentCode = code;
+                    this.studentName = realName;
+                    
+                    Map<String, Object> respPayload = Map.of(
+                        "status", "SUCCESS",
+                        "message", "Xin chào " + realName
+                    );
+                    manager.sendMessage(this, new JsonMessage("LOGIN_RESPONSE", respPayload));
+                    
+                    System.out.println(">> Login thành công: " + code + " (" + realName + ")");
+                } else {
+                    Map<String, Object> respPayload = Map.of(
+                        "status", "FAIL",
+                        "message", "Sai mã SV hoặc Họ tên!"
+                    );
+                    manager.sendMessage(this, new JsonMessage("LOGIN_RESPONSE", respPayload));
+                    System.out.println(">> Login thất bại: " + code);
+                }
                 break;
             case "CMD_GET_AGENT_LIST":
                 manager.sendAgentListToAdmin(this);
@@ -159,7 +199,7 @@ public class ClientHandler extends Thread {
                         System.out.println("Đã lưu tên lớp vào hệ thống: " + className);
                     } else {
                         System.out.println("Cảnh báo: Admin không gửi tên lớp!");
-                    }                    //System.out.println("check className: " + currentExamClassName);
+                    }                    
                     int quizId = quizIdDouble.intValue();
                     
                     System.out.println("Nhận lệnh BẮT ĐẦU THI cho bộ đề: " + quizId);
@@ -168,12 +208,11 @@ public class ClientHandler extends Thread {
 
                     if (quizData != null) {
                     	
-                        System.out.println("Lấy dữ liệu thành công. Gửi bài thi cho Agents...");
+                        System.out.println("Lấy dữ liệu thành công. Gửi bài thi cho tất cả học sinh!");
 
                         //dịch map -> quiz
                         Map<String, Object> payload = Map.of("quizData", quizData);
                         JsonMessage quizMsg = new JsonMessage("SERVER_CMD_START_QUIZ", payload);
-
                         manager.broadcastToAgents(quizMsg);
 
                     } else {
@@ -198,6 +237,7 @@ public class ClientHandler extends Thread {
 			System.out.println("check className "+ className);
             int quizId = ((Double) payload.get("quizId")).intValue();
             List<Double> userAnswersDouble = (List<Double>) payload.get("answers");
+            String submittedAt = payload.get("submittedAt").toString();
             
             Quiz quiz = ApiClient.getInstance().getQuizData(quizId);
             if (className == null) {
@@ -210,6 +250,7 @@ public class ClientHandler extends Thread {
             }
             
             List<Question> questions = quiz.getQuestions();
+
             
             //Chấm điểm
             int correctCount = 0;
@@ -228,7 +269,7 @@ public class ClientHandler extends Thread {
             
             System.out.println("Máy " + agentMachineName + " đạt " + correctCount + "/" + questions.size() + " - Điểm: " + score);
             
-            ApiClient.getInstance().postExamResult(quizId, agentMachineName, score, className);
+            ApiClient.getInstance().postExamResult(quizId, agentMachineName, this.studentName, this.studentCode, score, className, submittedAt);
             
             // có thể gửi 1 tin nhắn về Client báo là đã nộp bài)
             
